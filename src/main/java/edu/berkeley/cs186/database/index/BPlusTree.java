@@ -202,8 +202,9 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
+        LeafNode leftmostLeaf = root.getLeftmostLeaf();
 
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(leftmostLeaf, 0);
     }
 
     /**
@@ -235,8 +236,15 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
+        LeafNode leafNode = root.get(key);
+        int i;
+        for (i = 0; i < leafNode.getKeys().size(); i++) {
+            if (leafNode.getKeys().get(i).compareTo(key) == 0) {
+                break;
+            }
+        }
 
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(leafNode, i);
     }
 
     /**
@@ -429,18 +437,34 @@ public class BPlusTree {
     private class BPlusTreeIterator implements Iterator<RecordId> {
         // TODO(proj2): Add whatever fields and constructors you want here.
 
+        private LeafNode node;
+        private int nextIdx;
+
+        BPlusTreeIterator(LeafNode node, int nextIdx) {
+            this.node = node;
+            this.nextIdx = nextIdx;
+        }
+
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-
-            return false;
+            return node != null && nextIdx < node.getKeys().size();
         }
 
         @Override
         public RecordId next() {
             // TODO(proj2): implement
-
-            throw new NoSuchElementException();
+            RecordId result = node.getRids().get(nextIdx);
+            if (++nextIdx == node.getRids().size()) {
+                Optional<LeafNode> rightSibling = node.getRightSibling();
+                if (rightSibling.isPresent()) {
+                    node = rightSibling.get();
+                    nextIdx = 0;
+                } else {
+                    node = null;
+                }
+            }
+            return result;
         }
     }
 }
