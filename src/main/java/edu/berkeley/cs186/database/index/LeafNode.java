@@ -148,7 +148,7 @@ class LeafNode extends BPlusNode {
     public LeafNode get(DataBox key) {
         // TODO(proj2): implement
 
-        return null;
+        return this;
     }
 
     // See BPlusNode.getLeftmostLeaf.
@@ -156,7 +156,7 @@ class LeafNode extends BPlusNode {
     public LeafNode getLeftmostLeaf() {
         // TODO(proj2): implement
 
-        return null;
+        return this;
     }
 
     // See BPlusNode.put.
@@ -164,7 +164,42 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
 
-        return Optional.empty();
+        // 先插入新节点
+        int i;
+        for (i = 0; i < keys.size(); i++) {
+            int result = keys.get(i).compareTo(key);
+            if (result == 0) {
+                throw new BPlusTreeException("key已经存在");
+            } else if (result > 0) {
+                break;
+            }
+        }
+        if (i > keys.size()) {
+            keys.add(key);
+            rids.add(rid);
+        } else {
+            keys.add(i, key);
+            rids.add(i, rid);
+        }
+
+        // 再考虑分裂
+        if (keys.size() > metadata.getOrder() * 2) {
+            LeafNode newNode = new LeafNode(metadata, bufferManager,
+                    keys.subList(metadata.getOrder(), this.keys.size()),
+                    rids.subList(metadata.getOrder(), this.rids.size()),
+                    rightSibling, treeContext);
+            long newNodePageNum = newNode.page.getPageNum();
+
+            keys = keys.subList(0, metadata.getOrder());
+            rids = rids.subList(0, metadata.getOrder());
+            rightSibling = Optional.of(newNodePageNum);
+            sync();
+
+            return Optional.of(new Pair<>(newNode.keys.get(0), newNodePageNum));
+        } else {
+            sync();
+            return Optional.empty();
+        }
     }
 
     // See BPlusNode.bulkLoad.
@@ -181,7 +216,17 @@ class LeafNode extends BPlusNode {
     public void remove(DataBox key) {
         // TODO(proj2): implement
 
-        return;
+        for (int i = 0; i < keys.size(); i++) {
+            int result = keys.get(i).compareTo(key);
+            if (result == 0) {
+                keys.remove(i);
+                rids.remove(i);
+                sync();
+                return;
+            } else if (result > 0) {
+                return;
+            }
+        }
     }
 
     // Iterators ///////////////////////////////////////////////////////////////

@@ -82,7 +82,10 @@ class InnerNode extends BPlusNode {
     public LeafNode get(DataBox key) {
         // TODO(proj2): implement
 
-        return null;
+        int idx = numLessThanEqual(key, keys);
+        long pageNum = children.get(idx);
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, pageNum);
+        return child.get(key);
     }
 
     // See BPlusNode.getLeftmostLeaf.
@@ -91,15 +94,64 @@ class InnerNode extends BPlusNode {
         assert(children.size() > 0);
         // TODO(proj2): implement
 
-        return null;
+        long pageNum = children.get(0);
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, pageNum);
+        return child.getLeftmostLeaf();
     }
 
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
+        // 左右各一半。中间的key往上层提。
 
-        return Optional.empty();
+        int idx = numLessThanEqual(key, keys);
+        long pageNum = children.get(idx);
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, pageNum);
+        Optional<Pair<DataBox, Long>> ret = child.put(key, rid);
+        if (ret.isPresent() == false) {
+            return Optional.empty();
+        }
+
+        DataBox splitKey = ret.get().getFirst();
+        long rightChild = ret.get().getSecond();
+
+        int i;
+        for (i = 0; i < keys.size(); i++) {
+            int result = keys.get(i).compareTo(splitKey);
+            if (result == 0) {
+                throw new BPlusTreeException("key已经存在");
+            } else if (result > 0) {
+                break;
+            }
+        }
+        if (i > keys.size()) {
+            keys.add(splitKey);
+            children.add(rightChild);
+        } else {
+            keys.add(i, splitKey);
+            children.add(i + 1, rightChild);  // 这里要错开1个位置
+        }
+
+        // 再考虑分裂
+        if (keys.size() > metadata.getOrder() * 2) {
+            InnerNode newNode = new InnerNode(metadata, bufferManager,
+                    keys.subList(metadata.getOrder() + 1, keys.size()),
+                    children.subList(metadata.getOrder() + 1, children.size()),
+                    treeContext);
+
+            Pair<DataBox, Long> result = new Pair<>(keys.get(metadata.getOrder()),
+                    newNode.page.getPageNum());
+
+            keys = keys.subList(0, metadata.getOrder());
+            children = children.subList(0, metadata.getOrder() + 1);
+            sync();
+
+            return Optional.of(result);
+        } else {
+            sync();
+            return Optional.empty();
+        }
     }
 
     // See BPlusNode.bulkLoad.
@@ -116,7 +168,10 @@ class InnerNode extends BPlusNode {
     public void remove(DataBox key) {
         // TODO(proj2): implement
 
-        return;
+        int idx = numLessThanEqual(key, keys);
+        long pageNum = children.get(idx);
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, pageNum);
+        child.remove(key);
     }
 
     // Helpers /////////////////////////////////////////////////////////////////
