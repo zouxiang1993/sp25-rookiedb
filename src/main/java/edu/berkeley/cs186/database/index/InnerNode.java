@@ -159,8 +159,28 @@ class InnerNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
-
-        return Optional.empty();
+        // 直接往最右边的节点插
+        long pageNum = children.get(children.size() - 1);
+        BPlusNode child = BPlusNode.fromBytes(metadata, bufferManager, treeContext, pageNum);
+        Optional<Pair<DataBox, Long>> ret = child.bulkLoad(data, fillFactor);
+        if (ret.isPresent() == false) {
+            return Optional.empty();
+        }
+        int max = (int) Math.ceil(metadata.getOrder() * 2 * fillFactor);
+        Pair<DataBox, Long> retPair = ret.get();
+        if (keys.size() < max) {
+            keys.add(retPair.getFirst());
+            children.add(retPair.getSecond());
+            sync();
+            return Optional.empty();
+        } else {
+            InnerNode newNode = new InnerNode(metadata, bufferManager,
+                    Arrays.asList(retPair.getFirst()),
+                    Arrays.asList(retPair.getSecond()),
+                    treeContext);
+            sync();
+            return Optional.of(new Pair<>(retPair.getFirst(), newNode.page.getPageNum()));
+        }
     }
 
     // See BPlusNode.remove.

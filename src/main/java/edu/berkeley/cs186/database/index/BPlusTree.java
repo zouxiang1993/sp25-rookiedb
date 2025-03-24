@@ -302,7 +302,22 @@ public class BPlusTree {
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
 
-        return;
+        if (root instanceof InnerNode) {
+            throw new BPlusTreeException("只有空树支持bulkLoad");
+        }
+        LeafNode leafRoot = (LeafNode) root;
+        if (!leafRoot.getKeys().isEmpty()) {
+            throw new BPlusTreeException("只有空树支持bulkLoad");
+        }
+
+        while (data.hasNext()) {
+            Optional<Pair<DataBox, Long>> ret = root.bulkLoad(data, fillFactor);
+            if (ret.isPresent()) {
+                BPlusNode newRoot = new InnerNode(metadata, bufferManager, Arrays.asList(ret.get().getFirst()),
+                        Arrays.asList(root.getPage().getPageNum(), ret.get().getSecond()), lockContext);
+                this.updateRoot(newRoot);
+            }
+        }
     }
 
     /**
